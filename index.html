@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width">
+
+ <title>Chat</title>
+
+ <script src="paho.javascript-1.0.3/paho-mqtt-min.js"></script>
+
+</head>
+
+<body>
+
+ <form onsubmit="formActivada(event)">
+
+  <h1>Chat</h1>
+
+  <p>
+   <label>
+    Alias *
+    <input id="inputAlias" required>
+   </label>
+  </p>
+
+  <p>
+   <label>
+    Mensaje *
+    <input id="inputMensaje" required>
+   </label>
+  </p>
+
+  <p>* Obligatorio</p>
+
+  <p><button type="submit">Enviar</button></p>
+
+  <pre id="pre"></pre>
+
+ </form>
+
+ <script type="module">
+
+  import { exportaAHtml } from "./lib/js/exportaAHtml.js"
+  import { creaIdCliente } from "./lib/js/creaIdCliente.js"
+  import { falloEnLaConexionMqtt } from "./lib/js/falloEnLaConexionMqtt.js"
+  import { conexionMqttPerdida } from "./lib/js/conexionMqttPerdida.js"
+  import { muestraError } from "./lib/js/muestraError.js"
+
+  const TOPICO_CHAT = "SystemOffChat/chat"
+
+  // Cambia por una raíz para tu proyecto.
+  const clientId = creaIdCliente("SystemOffChat-")
+
+  // Si usas un servidor de MQTT diferente, necesitas cambiar los parámetros.
+  const cliente = new Paho.MQTT.Client("test.mosquitto.org", 8081, clientId)
+
+  /**
+   * @param {Event} event
+   */
+  function formActivada(event) {
+   try {
+    event.preventDefault()
+    const mensaje = `${inputAlias.value.trim()}
+${inputMensaje.value.trim()}`
+    enviaMensajeMqtt(mensaje, TOPICO_CHAT)
+   } catch (error) {
+    muestraError(error)
+   }
+  }
+  exportaAHtml(formActivada)
+
+  // Acciones al recibir un mensaje.
+  cliente.onMessageArrived = mensaje => {
+   if (mensaje.destinationName === TOPICO_CHAT) {
+    pre.textContent += mensaje.payloadString + "\n\n"
+   }
+  }
+
+  // Acciones al perder la conexión.
+  cliente.onConnectionLost = conexionMqttPerdida
+
+  // Configura el cliente.
+  cliente.connect({
+
+   keepAliveInterval: 10,
+
+   useSSL: true,
+
+   // Acciones al fallar la conexión.
+   onFailure: falloEnLaConexionMqtt,
+
+   // Acciones al lograr la conexión.
+   onSuccess: () => {
+    console.log("Conectado")
+    // Se suscribe a uno o más tópicos.
+    cliente.subscribe(TOPICO_CHAT)
+   },
+
+  })
+
+  /**
+   * Envá un valor al servidor de MQTT y es reenviado a todos los dispositivos
+   * suscritos al tópico indicado
+   * @param {string} mensaje
+   * @param {string} topico
+   */
+  function enviaMensajeMqtt(mensaje, topico) {
+   const mensajeMqtt = new Paho.MQTT.Message(mensaje)
+   mensajeMqtt.destinationName = topico
+   cliente.send(mensajeMqtt)
+  }
+
+ </script>
+
+</body>
+
+</html>
